@@ -228,13 +228,31 @@ jobs:
             -p:TargetFramework=net10.0-ios
 
       # ------------------------------------------------------------
-      # Build
+      # Publish
       # ------------------------------------------------------------
 
-      - name: Build MedExpert iOS
+      - name: Publish MedExpert iOS
         working-directory: MedExpert
         run: |
-          dotnet build \
+          dotnet publish \
             MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
             -f net10.0-ios \
-            -c Release
+            -c Release \
+            -p:ArchiveOnBuild=true \
+            -p:BuildIpa=true
+
+      - name: Find IPA
+        working-directory: MedExpert
+        run: |
+          echo "=== Generated IPA files ==="
+          find MedExpert.Mobile/App/bin/Release \
+            -type f \
+            -name "*.ipa" \
+            -print
+      
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MedExpert-iOS
+          path: MedExpert/MedExpert.Mobile/App/bin/Release/**/*.ipa
+          if-no-files-found: error
