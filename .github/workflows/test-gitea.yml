@@ -73,3 +73,12 @@ jobs:
           echo ""
           echo "=== Workloads ==="
           dotnet workload list
+  
+      - name: Restore MAUI workloads
+        working-directory: MedExpert
+        run: |
+          dotnet workload restore MedExpert.Mobile/MedExpert.Mobile.csproj
+
+      - name: Check installed workloads
+        run: |
+          dotnet workload list
