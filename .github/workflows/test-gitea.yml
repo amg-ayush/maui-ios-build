@@ -29,6 +29,7 @@ jobs:
           git clone \
             --depth 1 \
             --branch maui_10 \
+            --progress \
             ssh://git@git2.ipcbc.com:2222/IPCBC/MedExpert.git \
             MedExpert
 
