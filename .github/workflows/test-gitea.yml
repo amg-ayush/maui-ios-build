@@ -60,3 +60,16 @@ jobs:
             -type d \
             -name "Xcode*.app" \
             -print | sort
+      
+      - name: Check .NET
+        run: |
+          echo "=== .NET SDK ==="
+          dotnet --version
+      
+          echo ""
+          echo "=== .NET info ==="
+          dotnet --info
+      
+          echo ""
+          echo "=== Workloads ==="
+          dotnet workload list
