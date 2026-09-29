@@ -112,3 +112,17 @@ jobs:
         run: |
           dotnet restore \
             MedExpert.Mobile/App/MedExpert.Mobile.App.csproj
+
+      # ------------------------------------------------------------
+      # Build MedExpert iOS
+      # ------------------------------------------------------------
+
+      - name: Build MedExpert iOS
+        working-directory: MedExpert
+        run: |
+          dotnet build \
+            MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
+            -f net10.0-ios \
+            -c Release \
+            -p:RuntimeIdentifier=ios-arm64 \
+            --no-restore
