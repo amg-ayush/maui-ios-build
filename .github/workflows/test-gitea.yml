@@ -1,4 +1,4 @@
-name: Test Gitea connection
+name: Test Gitea clone
 
 on:
   workflow_dispatch:
@@ -8,19 +8,31 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - name: Show runner information
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.GITEA_SSH_PRIVATE_KEY }}
         run: |
-          sw_vers
-          uname -m
+          mkdir -p ~/.ssh
 
-      - name: Resolve Gitea
-        run: |
-          nslookup git2.ipcbc.com
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
 
-      - name: Test TCP port 2222
-        run: |
-          nc -vz -w 10 git2.ipcbc.com 2222
+          ssh-keyscan -p 2222 git2.ipcbc.com >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-      - name: Test SSH handshake
+      - name: Test SSH authentication
         run: |
-          ssh-keyscan -p 2222 -T 10 git2.ipcbc.com
+          ssh -T -p 2222 git@git2.ipcbc.com || true
+
+      - name: Clone MedExpert
+        run: |
+          git clone \
+            ssh://git@git2.ipcbc.com:2222/IPCBC/MedExpert.git \
+            MedExpert
+
+      - name: Check repository
+        run: |
+          cd MedExpert
+          git status
+          git remote -v
+          git log -1 --oneline
