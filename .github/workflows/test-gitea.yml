@@ -38,3 +38,24 @@ jobs:
           git status
           git remote -v
           git log -1 --oneline
+
+      - name: Check available Xcode versions
+        run: |
+          echo "=== macOS ==="
+          sw_vers
+      
+          echo ""
+          echo "=== Current Xcode ==="
+          xcodebuild -version
+      
+          echo ""
+          echo "=== Developer directory ==="
+          xcode-select -p
+      
+          echo ""
+          echo "=== Installed Xcode ==="
+          find /Applications \
+            -maxdepth 1 \
+            -type d \
+            -name "Xcode*.app" \
+            -print | sort
