@@ -27,6 +27,8 @@ jobs:
       - name: Clone MedExpert
         run: |
           git clone \
+            --depth 1 \
+            --branch maui_10 \
             ssh://git@git2.ipcbc.com:2222/IPCBC/MedExpert.git \
             MedExpert
 
