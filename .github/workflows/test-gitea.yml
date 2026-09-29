@@ -107,11 +107,13 @@ jobs:
       # NuGet restore
       # ------------------------------------------------------------
 
-      - name: Restore MedExpert.Mobile
+      - name: Restore MedExpert iOS
         working-directory: MedExpert
         run: |
           dotnet restore \
-            MedExpert.Mobile/App/MedExpert.Mobile.App.csproj
+            MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
+            -p:Configuration=Release \
+            -p:TargetFramework=net10.0-ios
 
       # ------------------------------------------------------------
       # Build MedExpert iOS
@@ -123,6 +125,4 @@ jobs:
           dotnet build \
             MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
             -f net10.0-ios \
-            -c Release \
-            -p:RuntimeIdentifier=ios-arm64 \
-            --no-restore
+            -c Release
