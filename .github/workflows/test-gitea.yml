@@ -1,13 +1,17 @@
-name: Test Gitea clone
+name: Build MedExpert iOS
 
 on:
   workflow_dispatch:
 
 jobs:
-  test:
+  build-ios:
     runs-on: macos-latest
 
     steps:
+      # ------------------------------------------------------------
+      # SSH / Gitea
+      # ------------------------------------------------------------
+
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.GITEA_SSH_PRIVATE_KEY }}
@@ -20,10 +24,6 @@ jobs:
           ssh-keyscan -p 2222 git2.ipcbc.com >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Test SSH authentication
-        run: |
-          ssh -T -p 2222 git@git2.ipcbc.com || true
-
       - name: Clone MedExpert
         run: |
           git clone \
@@ -34,56 +34,81 @@ jobs:
             MedExpert
 
       - name: Check repository
+        working-directory: MedExpert
         run: |
-          cd MedExpert
-          git status
-          git remote -v
+          echo "=== Branch ==="
+          git branch --show-current
+
+          echo ""
+          echo "=== Commit ==="
           git log -1 --oneline
 
-      - name: Check available Xcode versions
+          echo ""
+          echo "=== Status ==="
+          git status
+
+      # ------------------------------------------------------------
+      # Xcode
+      # ------------------------------------------------------------
+
+      - name: Select Xcode 26.6
         run: |
+          sudo xcode-select \
+            --switch /Applications/Xcode_26.6.app/Contents/Developer
+
           echo "=== macOS ==="
           sw_vers
-      
+
           echo ""
-          echo "=== Current Xcode ==="
+          echo "=== Xcode ==="
           xcodebuild -version
-      
+
           echo ""
           echo "=== Developer directory ==="
           xcode-select -p
-      
-          echo ""
-          echo "=== Installed Xcode ==="
-          find /Applications \
-            -maxdepth 1 \
-            -type d \
-            -name "Xcode*.app" \
-            -print | sort
-      
+
+      # ------------------------------------------------------------
+      # .NET
+      # ------------------------------------------------------------
+
+      - name: Setup .NET 10.0.401
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.401'
+
       - name: Check .NET
         run: |
           echo "=== .NET SDK ==="
           dotnet --version
-      
+
           echo ""
           echo "=== .NET info ==="
           dotnet --info
-      
-          echo ""
-          echo "=== Workloads ==="
-          dotnet workload list
 
-      - name: Find MAUI project
-        working-directory: MedExpert
+      # ------------------------------------------------------------
+      # MAUI / iOS workloads
+      # ------------------------------------------------------------
+
+      - name: Install MAUI workload for Xcode 26.6
         run: |
-          find MedExpert.Mobile -name "*.csproj" -print
-      
-      - name: Restore MAUI workloads
-        working-directory: MedExpert
-        run: |
-          dotnet workload restore MedExpert.Mobile/App/MedExpert.Mobile.App.csproj
+          dotnet workload install maui ios \
+            --version 10.0.401
 
       - name: Check installed workloads
         run: |
+          echo "=== Workload info ==="
+          dotnet workload --info
+
+          echo ""
+          echo "=== Workload list ==="
           dotnet workload list
+
+      # ------------------------------------------------------------
+      # NuGet restore
+      # ------------------------------------------------------------
+
+      - name: Restore MedExpert.Mobile
+        working-directory: MedExpert
+        run: |
+          dotnet restore \
+            MedExpert.Mobile/App/MedExpert.Mobile.App.csproj
