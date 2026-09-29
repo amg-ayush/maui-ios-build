@@ -1,0 +1,26 @@
+name: Test Gitea connection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: macos-latest
+
+    steps:
+      - name: Show runner information
+        run: |
+          sw_vers
+          uname -m
+
+      - name: Resolve Gitea
+        run: |
+          nslookup git2.ipcbc.com
+
+      - name: Test TCP port 2222
+        run: |
+          nc -vz -w 10 git2.ipcbc.com 2222
+
+      - name: Test SSH handshake
+        run: |
+          ssh-keyscan -p 2222 -T 10 git2.ipcbc.com
