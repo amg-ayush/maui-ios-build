@@ -78,11 +78,11 @@ jobs:
         working-directory: MedExpert
         run: |
           find MedExpert.Mobile -name "*.csproj" -print
-  
+      
       - name: Restore MAUI workloads
         working-directory: MedExpert
         run: |
-          dotnet workload restore MedExpert.Mobile/App/MedExpert.Mobile.csproj
+          dotnet workload restore MedExpert.Mobile/App/MedExpert.Mobile.App.csproj
 
       - name: Check installed workloads
         run: |
