@@ -1,0 +1,287 @@
+name: Build and Deploy MedExpert iOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build and deploy iOS
+    runs-on: macos-latest
+
+    steps:
+      # ------------------------------------------------------------
+      # SSH / Gitea
+      # ------------------------------------------------------------
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.GITEA_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -p 2222 git2.ipcbc.com >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Clone MedExpert
+        run: |
+          git clone \
+            --depth 1 \
+            --branch maui_10 \
+            --progress \
+            ssh://git@git2.ipcbc.com:2222/IPCBC/MedExpert.git \
+            MedExpert
+
+      - name: Check repository
+        working-directory: MedExpert
+        run: |
+          echo "=== Branch ==="
+          git branch --show-current
+
+          echo ""
+          echo "=== Commit ==="
+          git log -1 --oneline
+
+          echo ""
+          echo "=== Status ==="
+          git status
+
+      # ------------------------------------------------------------
+      # Xcode
+      # ------------------------------------------------------------
+
+      - name: Select Xcode 26.6
+        run: |
+          sudo xcode-select \
+            --switch /Applications/Xcode_26.6.app/Contents/Developer
+
+          echo "=== macOS ==="
+          sw_vers
+
+          echo ""
+          echo "=== Xcode ==="
+          xcodebuild -version
+
+          echo ""
+          echo "=== Developer directory ==="
+          xcode-select -p
+
+      # ------------------------------------------------------------
+      # .NET
+      # ------------------------------------------------------------
+
+      - name: Setup .NET 10.0.401
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.401'
+
+      - name: Check .NET
+        run: |
+          echo "=== .NET SDK ==="
+          dotnet --version
+
+          echo ""
+          echo "=== .NET info ==="
+          dotnet --info
+
+      # ------------------------------------------------------------
+      # MAUI / iOS workloads
+      # ------------------------------------------------------------
+
+      - name: Install MAUI workload for Xcode 26.6
+        run: |
+          dotnet workload install maui ios \
+            --version 10.0.401
+
+      - name: Check installed workloads
+        run: |
+          echo "=== Workload info ==="
+          dotnet workload --info
+
+          echo ""
+          echo "=== Workload list ==="
+          dotnet workload list
+
+      # ------------------------------------------------------------
+      # Apple code signing
+      # ------------------------------------------------------------
+
+      - name: Install Apple certificate and provisioning profile
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/distribution.p12"
+          PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 32)"
+
+          echo "=== Decode certificate ==="
+          printf '%s' "$IOS_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+
+          echo "=== Decode provisioning profile ==="
+          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+
+          echo "=== Create temporary keychain ==="
+          security create-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          security set-keychain-settings \
+            -lut 21600 \
+            "$KEYCHAIN_PATH"
+
+          security unlock-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          echo "=== Import distribution certificate ==="
+          security import "$CERTIFICATE_PATH" \
+            -P "$IOS_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          echo "=== Configure private key access ==="
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          echo "=== Add keychain to search list ==="
+          security list-keychains \
+            -d user \
+            -s "$KEYCHAIN_PATH" login.keychain-db
+
+          echo "=== Read provisioning profile ==="
+          security cms \
+            -D \
+            -i "$PROFILE_PATH" \
+            > "$RUNNER_TEMP/profile.plist"
+
+          PROFILE_UUID=$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :UUID" \
+              "$RUNNER_TEMP/profile.plist"
+          )
+
+          PROFILE_NAME=$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :Name" \
+              "$RUNNER_TEMP/profile.plist"
+          )
+
+          echo "Provisioning profile:"
+          echo "Name: $PROFILE_NAME"
+          echo "UUID: $PROFILE_UUID"
+
+          echo "=== Install provisioning profile ==="
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+
+          cp "$PROFILE_PATH" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+
+      - name: Check Apple signing
+        run: |
+          echo "=== Signing identities ==="
+          security find-identity -v -p codesigning
+
+          echo ""
+          echo "=== Installed provisioning profiles ==="
+
+          for file in "$HOME/Library/MobileDevice/Provisioning Profiles/"*.mobileprovision; do
+            plist=$(mktemp)
+
+            security cms -D -i "$file" > "$plist"
+
+            name=$(
+              /usr/libexec/PlistBuddy \
+                -c "Print :Name" \
+                "$plist"
+            )
+
+            uuid=$(
+              /usr/libexec/PlistBuddy \
+                -c "Print :UUID" \
+                "$plist"
+            )
+
+            echo "$name ($uuid)"
+
+            rm -f "$plist"
+          done
+
+      # ------------------------------------------------------------
+      # NuGet restore
+      # ------------------------------------------------------------
+
+      - name: Restore MedExpert iOS
+        working-directory: MedExpert
+        run: |
+          dotnet restore \
+            MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
+            -p:Configuration=Release \
+            -p:TargetFramework=net10.0-ios
+
+      # ------------------------------------------------------------
+      # Publish
+      # ------------------------------------------------------------
+
+      - name: Publish MedExpert iOS
+        working-directory: MedExpert
+        run: |
+          dotnet publish \
+            MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
+            -f net10.0-ios \
+            -c Release \
+            -p:ArchiveOnBuild=true \
+            -p:BuildIpa=true
+
+      - name: Find IPA
+        working-directory: MedExpert
+        run: |
+          echo "=== Generated IPA files ==="
+          find MedExpert.Mobile/App/bin/Release \
+            -type f \
+            -name "*.ipa" \
+            -print
+      
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MedExpert-iOS
+          path: MedExpert/MedExpert.Mobile/App/bin/Release/**/*.ipa
+          if-no-files-found: error
+
+      - name: Setup App Store Connect API Key
+        shell: bash
+        env:
+          APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+      
+          echo "$APPSTORE_PRIVATE_KEY" > \
+            ~/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8
+      
+      - name: Upload to TestFlight
+        shell: bash
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          IPA_PATH=$(find . -name "*.ipa" -type f | head -n 1)
+      
+          echo "Uploading: $IPA_PATH"
+      
+          xcrun altool \
+            --upload-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APPSTORE_KEY_ID" \
+            --apiIssuer "$APPSTORE_ISSUER_ID"
