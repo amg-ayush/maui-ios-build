@@ -9,10 +9,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout target branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ vars.TARGET_BRANCH }}
+      # ------------------------------------------------------------
+      # SSH / Gitea
+      # ------------------------------------------------------------
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.GITEA_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -p 2222 git2.ipcbc.com >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Clone MedExpert
+        run: |
+          git clone \
+            --depth 1 \
+            --branch "${{ vars.TARGET_BRANCH }}" \
+            --progress \
+            ssh://git@git2.ipcbc.com:2222/IPCBC/MedExpert.git \
+            MedExpert
+
+      - name: Check repository
+        working-directory: MedExpert
+        run: |
+          echo "=== Branch ==="
+          git branch --show-current
+
+          echo ""
+          echo "=== Commit ==="
+          git log -1 --oneline
+
+          echo ""
+          echo "=== Status ==="
+          git status
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -28,12 +62,14 @@ jobs:
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "${{ github.workspace }}/android.keystore"
 
       - name: Restore dependencies
+        working-directory: MedExpert
         run: |
-          dotnet restore MedExpert/MedExpert.Mobile/App/MedExpert.Mobile.App.csproj
+          dotnet restore MedExpert.Mobile/App/MedExpert.Mobile.App.csproj
 
       - name: Publish signed AAB
+        working-directory: MedExpert
         run: |
-          dotnet publish MedExpert/MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
+          dotnet publish MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
             -f net10.0-android \
             -c Release \
             --no-restore \
