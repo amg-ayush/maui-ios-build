@@ -61,10 +61,13 @@ jobs:
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "${{ github.workspace }}/android.keystore"
 
-      - name: Restore dependencies
+      - name: Restore MedExpert Android
         working-directory: MedExpert
         run: |
-          dotnet restore MedExpert.Mobile/App/MedExpert.Mobile.App.csproj
+          dotnet restore \
+            MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
+            -p:Configuration=Release \
+            -p:TargetFramework=net10.0-android
 
       - name: Publish signed AAB
         working-directory: MedExpert
