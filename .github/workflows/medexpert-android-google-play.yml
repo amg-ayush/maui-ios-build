@@ -9,8 +9,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout target branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ vars.TARGET_BRANCH }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -38,7 +40,7 @@ jobs:
             -p:AndroidPackageFormats=aab \
             -p:AndroidKeyStore=true \
             -p:AndroidSigningKeyStore="${{ github.workspace }}/android.keystore" \
-            -p:AndroidSigningKeyAlias=com.companyname.medexpertclient \
+            -p:AndroidSigningKeyAlias="${{ vars.ANDROID_KEY_ALIAS }}" \
             -p:AndroidSigningKeyPass="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
             -p:AndroidSigningStorePass="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
 
@@ -69,7 +71,7 @@ jobs:
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.ipcbc.MedExpertClientTest
+          packageName: ${{ vars.ANDROID_PACKAGE_NAME }}
           releaseFiles: ${{ steps.find_aab.outputs.aab_path }}
-          track: Медэксперт Тест
+          track: ${{ vars.GOOGLE_PLAY_TRACK }}
           status: completed
