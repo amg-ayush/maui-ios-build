@@ -76,28 +76,28 @@ jobs:
             -p:AndroidSigningKeyPass="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
             -p:AndroidSigningStorePass="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
 
-      - name: Find AAB
+      - name: Find signed AAB
         id: find_aab
         shell: bash
         run: |
-          echo "=== Generated AAB files ==="
+          echo "=== Generated signed AAB files ==="
       
-          find MedExpert/MedExpert.Mobile/App/bin/Release/net10.0-android \
+          find MedExpert/MedExpert.Mobile/App/bin/Release/net10.0-android/publish \
             -type f \
-            -name "*.aab" \
+            -name "*-Signed.aab" \
             -print
       
-          AAB_PATH=$(find MedExpert/MedExpert.Mobile/App/bin/Release/net10.0-android \
+          AAB_PATH=$(find MedExpert/MedExpert.Mobile/App/bin/Release/net10.0-android/publish \
             -type f \
-            -name "*.aab" \
+            -name "*-Signed.aab" \
             | head -n 1)
       
           if [ -z "$AAB_PATH" ]; then
-            echo "AAB not found."
+            echo "Signed AAB not found."
             exit 1
           fi
       
-          echo "Found AAB: $AAB_PATH"
+          echo "Found signed AAB: $AAB_PATH"
           echo "aab_path=$AAB_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Upload AAB artifact
