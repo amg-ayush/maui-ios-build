@@ -48,6 +48,10 @@ jobs:
           echo "=== Status ==="
           git status
 
+      # ------------------------------------------------------------
+      # .NET / MAUI
+      # ------------------------------------------------------------
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -56,10 +60,39 @@ jobs:
       - name: Install .NET MAUI Android workload
         run: dotnet workload install maui-android
 
+      # ------------------------------------------------------------
+      # Android signing
+      # ------------------------------------------------------------
+
       - name: Restore Android keystore
         shell: bash
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "${{ github.workspace }}/android.keystore"
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" \
+            | base64 --decode \
+            > "${{ github.workspace }}/android.keystore"
+
+      # ------------------------------------------------------------
+      # Version
+      # ------------------------------------------------------------
+
+      - name: Generate Android version code
+        id: version
+        shell: bash
+        run: |
+          VERSION_CODE=$((
+            ${{ vars.ANDROID_VERSION_CODE_BASE }} +
+            ${{ github.run_number }}
+          ))
+
+          echo "=== Android version ==="
+          echo "GitHub run number: ${{ github.run_number }}"
+          echo "Android version code: $VERSION_CODE"
+
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------
+      # Publish
+      # ------------------------------------------------------------
 
       - name: Publish MedExpert Android
         working-directory: MedExpert
@@ -69,6 +102,7 @@ jobs:
             -f net10.0-android \
             -c Release \
             -p:AndroidOnlyBuild=true \
+            -p:AndroidVersionCode=${{ steps.version.outputs.version_code }} \
             -p:AndroidPackageFormats=aab \
             -p:AndroidKeyStore=true \
             -p:AndroidSigningKeyStore="${{ github.workspace }}/android.keystore" \
@@ -76,35 +110,43 @@ jobs:
             -p:AndroidSigningKeyPass="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
             -p:AndroidSigningStorePass="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
 
+      # ------------------------------------------------------------
+      # AAB
+      # ------------------------------------------------------------
+
       - name: Find signed AAB
         id: find_aab
         shell: bash
         run: |
           echo "=== Generated signed AAB files ==="
-      
+
           find MedExpert/MedExpert.Mobile/App/bin/Release/net10.0-android/publish \
             -type f \
             -name "*-Signed.aab" \
             -print
-      
+
           AAB_PATH=$(find MedExpert/MedExpert.Mobile/App/bin/Release/net10.0-android/publish \
             -type f \
             -name "*-Signed.aab" \
             | head -n 1)
-      
+
           if [ -z "$AAB_PATH" ]; then
             echo "Signed AAB not found."
             exit 1
           fi
-      
+
           echo "Found signed AAB: $AAB_PATH"
           echo "aab_path=$AAB_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: medexpert-android-aab
+          name: medexpert-android-aab-${{ steps.version.outputs.version_code }}
           path: ${{ steps.find_aab.outputs.aab_path }}
+
+      # ------------------------------------------------------------
+      # Google Play
+      # ------------------------------------------------------------
 
       - name: Upload to Google Play Closed Testing
         uses: r0adkll/upload-google-play@v1
