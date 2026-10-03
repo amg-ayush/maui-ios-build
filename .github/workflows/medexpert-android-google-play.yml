@@ -68,6 +68,7 @@ jobs:
             MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
             -f net10.0-android \
             -c Release \
+            -p:AndroidOnlyBuild=true \
             -p:AndroidPackageFormats=aab \
             -p:AndroidKeyStore=true \
             -p:AndroidSigningKeyStore="${{ github.workspace }}/android.keystore" \
