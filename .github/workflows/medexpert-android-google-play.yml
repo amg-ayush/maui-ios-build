@@ -96,6 +96,8 @@ jobs:
 
       - name: Publish MedExpert Android
         working-directory: MedExpert
+        env:
+          SYNCFUSION_LICENSE_KEY: ${{ secrets.SYNCFUSION_LICENSE_KEY }}
         run: |
           dotnet publish \
             MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
@@ -103,6 +105,7 @@ jobs:
             -c Release \
             -p:AndroidOnlyBuild=true \
             -p:AndroidVersionCode=${{ steps.version.outputs.version_code }} \
+            -p:SyncfusionLicenseKey="$SYNCFUSION_LICENSE_KEY" \
             -p:AndroidPackageFormats=aab \
             -p:AndroidKeyStore=true \
             -p:AndroidSigningKeyStore="${{ github.workspace }}/android.keystore" \
