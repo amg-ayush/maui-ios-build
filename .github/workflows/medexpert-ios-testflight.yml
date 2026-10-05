@@ -229,6 +229,29 @@ jobs:
             -p:TargetFramework=net10.0-ios
 
       # ------------------------------------------------------------
+      # iOS version
+      # ------------------------------------------------------------
+
+      - name: Calculate iOS bundle version
+        shell: bash
+        env:
+          IOS_BUNDLE_VERSION_BASE: ${{ vars.IOS_BUNDLE_VERSION_BASE }}
+        run: |
+          if [ -z "$IOS_BUNDLE_VERSION_BASE" ]; then
+            echo "IOS_BUNDLE_VERSION_BASE is not configured"
+            exit 1
+          fi
+
+          IOS_BUNDLE_VERSION=$((IOS_BUNDLE_VERSION_BASE + GITHUB_RUN_NUMBER))
+
+          echo "IOS_BUNDLE_VERSION=$IOS_BUNDLE_VERSION" >> "$GITHUB_ENV"
+
+          echo "=== iOS Bundle Version ==="
+          echo "Base:       $IOS_BUNDLE_VERSION_BASE"
+          echo "Run number: $GITHUB_RUN_NUMBER"
+          echo "Bundle:     $IOS_BUNDLE_VERSION"
+
+      # ------------------------------------------------------------
       # Publish
       # ------------------------------------------------------------
 
@@ -241,30 +264,43 @@ jobs:
             echo "SYNCFUSION_LICENSE_KEY is not configured"
             exit 1
           fi
-      
+
+          echo "=== Publishing MedExpert iOS ==="
+          echo "iOS Bundle Version: $IOS_BUNDLE_VERSION"
+
           dotnet publish \
             MedExpert.Mobile/App/MedExpert.Mobile.App.csproj \
             -f net10.0-ios \
             -c Release \
             -p:ArchiveOnBuild=true \
             -p:BuildIpa=true \
+            -p:IosBundleVersion="$IOS_BUNDLE_VERSION" \
             -p:SyncfusionLicenseKey="$SYNCFUSION_LICENSE_KEY"
+
+      # ------------------------------------------------------------
+      # IPA
+      # ------------------------------------------------------------
 
       - name: Find IPA
         working-directory: MedExpert
         run: |
           echo "=== Generated IPA files ==="
+
           find MedExpert.Mobile/App/bin/Release \
             -type f \
             -name "*.ipa" \
             -print
-      
+
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MedExpert-iOS
+          name: MedExpert-iOS-${{ env.IOS_BUNDLE_VERSION }}
           path: MedExpert/MedExpert.Mobile/App/bin/Release/**/*.ipa
           if-no-files-found: error
+
+      # ------------------------------------------------------------
+      # App Store Connect
+      # ------------------------------------------------------------
 
       - name: Setup App Store Connect API Key
         shell: bash
@@ -273,10 +309,14 @@ jobs:
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
         run: |
           mkdir -p ~/.appstoreconnect/private_keys
-      
+
           echo "$APPSTORE_PRIVATE_KEY" > \
             ~/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8
-      
+
+      # ------------------------------------------------------------
+      # TestFlight
+      # ------------------------------------------------------------
+
       - name: Upload to TestFlight
         shell: bash
         env:
@@ -284,9 +324,16 @@ jobs:
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
         run: |
           IPA_PATH=$(find . -name "*.ipa" -type f | head -n 1)
-      
-          echo "Uploading: $IPA_PATH"
-      
+
+          if [ -z "$IPA_PATH" ]; then
+            echo "IPA file not found"
+            exit 1
+          fi
+
+          echo "=== Uploading to TestFlight ==="
+          echo "IPA: $IPA_PATH"
+          echo "Bundle Version: $IOS_BUNDLE_VERSION"
+
           xcrun altool \
             --upload-app \
             --type ios \
